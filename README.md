@@ -1,6 +1,7 @@
 # slogproto
 
-> **Warning**: this is an experimental module and is subject to change.
+> **Warning**
+> This is an experimental module and is subject to change.
 
 Go [`slog.Handler`](https://pkg.go.dev/golang.org/x/exp/slog#Handler) using [Protocol Buffers](https://protobuf.dev/). This can reduce the size of log messages when saving them to disk or sending them over the network, and can reduce the amount of time spent marshaling and unmarshaling log messages at the cost of human readability. To enable interopability with other tools, the `slp` CLI can read protobuf encoded [`slog.Record`](https://pkg.go.dev/golang.org/x/exp/slog#Record)s from STDIN (or a file) and output them as JSON to STDOUT.
 
