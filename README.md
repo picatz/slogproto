@@ -12,7 +12,7 @@ For use with Go programs:
 $ go get -u -v github.com/picatz/slogproto
 ```
 
-For use with the `slp` CLI:
+To use the `slp` CLI:
 
 ```console
 $ go install -u -v github.com/picatz/slogproto/cmd/slp@latest
