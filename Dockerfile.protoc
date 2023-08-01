@@ -1,0 +1,25 @@
+FROM golang:latest
+
+# Install dependencies
+RUN apt-get update && apt-get install -y unzip
+
+# Set the protoc version incantations
+ENV PROTOC_VERSION=3.19.1
+ENV PROTOC_GEN_GO_VERSION=1.31.0
+
+# Install protoc from GitHub releases
+RUN export PROTOC_REL=protoc-${PROTOC_VERSION}-linux-$([ $(uname -m) = "aarch64" ] && echo "aarch" || echo "x86")_64.zip \
+  && wget https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${PROTOC_REL} \
+  && unzip ${PROTOC_REL} -d protoc \
+  && mv protoc /usr/local \
+  && ln -s /usr/local/protoc/bin/protoc /usr/local/bin
+
+# Install protoc-gen-go using Go toolchain
+RUN go install google.golang.org/protobuf/cmd/protoc-gen-go@v${PROTOC_GEN_GO_VERSION}
+
+# Clean up
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* $(go env GOCACHE) $(go env GOMODCACHE)
+
+# Set the working directory
+RUN mkdir -p /workdir
+WORKDIR /workdir
