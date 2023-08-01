@@ -9,7 +9,7 @@ Go [`slog.Handler`](https://pkg.go.dev/golang.org/x/exp/slog#Handler) using [Pro
 For use with Go programs:
 
 ```console
-$ go get -u -v github.com/picatz/slogproto
+$ go get -u -v github.com/picatz/slogproto@latest
 ```
 
 To use the `slp` CLI:
