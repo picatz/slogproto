@@ -28,7 +28,7 @@ type Handler struct {
 	attrs []slog.Attr
 }
 
-func NewHander(w io.Writer) *Handler {
+func NewHandler(w io.Writer) *Handler {
 	return &Handler{
 		w: w,
 	}

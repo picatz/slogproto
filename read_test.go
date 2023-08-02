@@ -18,7 +18,7 @@ func TestRead(t *testing.T) {
 		t.Fatalf("expected no error, but got: %v", err)
 	}
 
-	logger := slog.New(slogproto.NewHander(fh))
+	logger := slog.New(slogproto.NewHandler(fh))
 	logger.Info("this is a test",
 		slog.Group("test",
 			slog.Int("test", 1),

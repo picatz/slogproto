@@ -33,7 +33,7 @@ func TestHandler(t *testing.T) {
 	var buf bytes.Buffer
 
 	// TODO: fix "got 2 results, want 14"
-	err := slogtest.TestHandler(slogproto.NewHander(&buf), func() []map[string]any {
+	err := slogtest.TestHandler(slogproto.NewHandler(&buf), func() []map[string]any {
 		return parseLogEntries(t, buf.Bytes())
 	})
 	if err != nil {
@@ -48,7 +48,7 @@ func ExampleHandler() {
 	}
 	defer fh.Close()
 
-	logger := slog.New(slogproto.NewHander(fh))
+	logger := slog.New(slogproto.NewHandler(fh))
 	logger.Info("this is a test",
 		slog.Group("test",
 			slog.Int("test1", 1),
