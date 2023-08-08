@@ -28,6 +28,11 @@ type Handler struct {
 	attrs []slog.Attr
 }
 
+// NewHandler returns a new Handler that writes to the writer.
+//
+// # Example
+//
+//	h := slogproto.NewHandler(os.Stdout)
 func NewHandler(w io.Writer) *Handler {
 	return &Handler{
 		w: w,
@@ -39,13 +44,13 @@ func (h *Handler) Enabled(ctx context.Context, level slog.Level) bool {
 	return true
 }
 
-var (
-	recordPool = sync.Pool{
-		New: func() interface{} {
-			return new(Record)
-		},
-	}
-)
+// recordPool is a pool of records used to reduce allocations when handling
+// log records in the [github.com/picatz/slogproto.Handler.Handle] method.
+var recordPool = sync.Pool{
+	New: func() interface{} {
+		return new(Record)
+	},
+}
 
 // Handle writes the log record to the writer as a protocol buffer encoded
 // struct containing the log record, including the level, message and attributes.
@@ -101,7 +106,9 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 		return err
 	}
 
-	buf := make([]byte, 4)
+	// Write the length of the struct to the writer
+	// so that the reader knows how much to read.
+	buf := make([]byte, 10)
 	binary.LittleEndian.PutUint32(buf, uint32(len(b)))
 	if _, err := h.w.Write(buf); err != nil {
 		return err
