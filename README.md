@@ -55,7 +55,7 @@ $ slp output.log
 
 ## File Format
 
-The file format is a series of [delimited](https://developers.google.com/protocol-buffers/docs/techniques#streaming) [Protocol Buffer](https://developers.google.com/protocol-buffers) messages. Each message is prefixed with a [varint](https://developers.google.com/protocol-buffers/docs/encoding#varints) that indicates the length of the message using a [base-128](https://en.wikipedia.org/wiki/Variable-length_quantity) encoding (4 bytes max).
+The file format is a series of [delimited](https://developers.google.com/protocol-buffers/docs/techniques#streaming) [Protocol Buffer](https://developers.google.com/protocol-buffers) messages. Each message is prefixed with a 32-bit unsigned integer representing the size of the message. The message itself is a protobuf encoded [`slog.Record`](https://pkg.go.dev/golang.org/x/exp/slog#Record).
 
 ```console
 ╭────────────────────────────────────────────────────────────╮
