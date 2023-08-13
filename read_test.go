@@ -19,13 +19,10 @@ func TestRead(t *testing.T) {
 	}
 
 	logger := slog.New(slogproto.NewHandler(fh))
-	logger.Info("this is a test",
-		slog.Group("test",
-			slog.Int("test", 1),
-			slog.String("test2", "test"),
-			slog.Float64("test3", 1.0),
-		),
-	)
+
+	for i := 0; i < 100; i++ {
+		logger.Info("this is a test", "test", i)
+	}
 
 	fh.Close()
 
@@ -34,7 +31,11 @@ func TestRead(t *testing.T) {
 		t.Fatalf("expected no error, but got: %v", err)
 	}
 
+	count := 0
+
 	err = slogproto.Read(context.Background(), fh, func(r *slog.Record) bool {
+		count++
+
 		if r.Message != "this is a test" {
 			t.Fatalf("expected message to be 'this is a test', but got: %s", r.Message)
 		}
@@ -48,10 +49,6 @@ func TestRead(t *testing.T) {
 				t.Fatalf("expected attribute key to be 'test', but got: %s", a.Key)
 			}
 
-			if len(a.Value.Group()) != 3 {
-				t.Fatalf("expected 3 attributes in group, but got: %d", len(a.Value.Group()))
-			}
-
 			return true
 		})
 
@@ -59,5 +56,9 @@ func TestRead(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatalf("error reading file: %v", err)
+	}
+
+	if count != 100 {
+		t.Fatalf("expected 100 records, but got: %d", count)
 	}
 }

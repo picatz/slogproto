@@ -17,9 +17,18 @@ func Read(ctx context.Context, r io.Reader, fn func(r *slog.Record) bool) error 
 
 	// Iterate over content from the scanner, which contains
 	// protobuf encoded messages in binary format, which cannot be split
-	// by line. Protobuf uses varint encoding for the length of
-	// the message, so we need to read the length of the message
-	// first, then read the message itself.
+	// by line.
+	//
+	//
+	// The file format is a series of [delimited](https://developers.google.com/protocol-buffers/docs/techniques#streaming)
+	// [Protocol Buffer](https://developers.google.com/protocol-buffers) messages. Each message is prefixed
+	// with a 32-bit unsigned integer representing the size of the message. The message
+	// itself is a protobuf encoded [`slog.Record`](https://pkg.go.dev/golang.org/x/exp/slog#Record).
+	//
+	// ╭────────────────────────────────────────────────────────────╮
+	// │  Message Size  │  Protocol Buffer Message  │  ...  │  EOF  │
+	// ╰────────────────────────────────────────────────────────────╯
+	//
 	scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
 		// Check context.
 		if ctx.Err() != nil {
@@ -31,7 +40,7 @@ func Read(ctx context.Context, r io.Reader, fn func(r *slog.Record) bool) error 
 			return 0, nil, nil
 		}
 
-		// Check if we have enough data to read the varint length.
+		// Check if we have enough data to read the message length.
 		if len(data) < 4 {
 			return 0, nil, nil
 		}
@@ -60,6 +69,11 @@ func Read(ctx context.Context, r io.Reader, fn func(r *slog.Record) bool) error 
 
 		attrs := make([]slog.Attr, 0, len(pbRecord.Attrs))
 		for k, v := range pbRecord.Attrs {
+			// Skip empty keys.
+			if k == "" {
+				continue
+			}
+
 			v, err := fromPBValue(v)
 			if err != nil {
 				return fmt.Errorf("error converting value: %w", err)
@@ -124,6 +138,8 @@ func fromPBValue(v *Value) (slog.Value, error) {
 		return slog.DurationValue(v.GetDuration().AsDuration()), nil
 	case *Value_Uint:
 		return slog.Uint64Value(uint64(v.GetUint())), nil
+	case *Value_Any:
+		return slog.AnyValue(v.GetAny()), nil
 	case *Value_Group:
 		attrs := make([]slog.Attr, 0, len(v.GetGroup().GetAttrs()))
 
