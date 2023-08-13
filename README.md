@@ -51,6 +51,9 @@ $ slp output.log
 ...
 ```
 
+> **Note**
+> Input to `slp` can be from STDIN or a file.
+
 #### Filtering
 
 The filter flag can be used to filter logs using a given expression. The expression is evaluated against the [`slog.Record`](https://pkg.go.dev/golang.org/x/exp/slog#Record) and must return a boolean value. For each log record that the expression evaluates as `true` will be output to STDOUT as JSON.
@@ -75,8 +78,6 @@ $ slp --filter='has(attrs.something)' output.log
 $  --filter='msg == "this is a test"' test.log
 {"time":"2023-08-11T00:06:00.474033Z","level":"INFO","msg":"this is a test","test":{"test2":"1","test3":1,"test1":1}}
 ```
-
-> **Note**: input to `slp` can be from STDIN or a file.
 
 ## File Format
 
