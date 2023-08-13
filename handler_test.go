@@ -2,11 +2,15 @@ package slogproto_test
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
+	"github.com/golang/snappy"
+	"github.com/klauspost/compress/zstd"
 	"github.com/picatz/slogproto"
 	"golang.org/x/exp/slog"
 	"golang.org/x/exp/slog/slogtest"
@@ -100,13 +104,140 @@ func TestHandler(t *testing.T) {
 
 	h := slogproto.NewHandler(&logBuffer)
 
-	// TODO: fix "got 13 results, want 14"
 	err := slogtest.TestHandler(h, func() []map[string]any {
 		return parseLogEntriesForExternal(t, logBuffer.Bytes())
 	})
 
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestHandler_Compression_Comparison(t *testing.T) {
+	const numRecords = 1024
+
+	cases := []struct {
+		name       string
+		newHandler func(w io.Writer) slog.Handler
+	}{
+		{
+			name: "text",
+			newHandler: func(w io.Writer) slog.Handler {
+				return slog.NewTextHandler(w, nil)
+			},
+		},
+		{
+			name: "json",
+			newHandler: func(w io.Writer) slog.Handler {
+				return slog.NewJSONHandler(w, nil)
+			},
+		},
+		{
+			name: "proto",
+			newHandler: func(w io.Writer) slog.Handler {
+				return slogproto.NewHandler(w)
+			},
+		},
+	}
+
+	for _, c := range cases {
+
+		t.Run(c.name, func(t *testing.T) {
+			t.Run("gzip", func(t *testing.T) {
+				var logBuffer bytes.Buffer
+
+				w := gzip.NewWriter(&logBuffer)
+
+				h := c.newHandler(w)
+
+				l := slog.New(h)
+
+				for i := 0; i < numRecords; i++ {
+					l.Info("hello world", slog.Int("i", i))
+				}
+
+				err := w.Flush()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				err = w.Close()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				t.Logf("wrote %s", humanSize(logBuffer.Len()))
+			})
+
+			t.Run("snappy", func(t *testing.T) {
+				var logBuffer bytes.Buffer
+
+				w := snappy.NewBufferedWriter(&logBuffer)
+
+				h := c.newHandler(w)
+
+				l := slog.New(h)
+
+				for i := 0; i < numRecords; i++ {
+					l.Info("hello world", slog.Int("i", i))
+				}
+
+				err := w.Flush()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				err = w.Close()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				t.Logf("wrote %s", humanSize(logBuffer.Len()))
+			})
+
+			t.Run("ztd", func(t *testing.T) {
+				var logBuffer bytes.Buffer
+
+				w, err := zstd.NewWriter(&logBuffer)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				h := c.newHandler(w)
+
+				l := slog.New(h)
+
+				for i := 0; i < numRecords; i++ {
+					l.Info("hello world", slog.Int("i", i))
+				}
+
+				err = w.Flush()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				err = w.Close()
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				t.Logf("wrote %s", humanSize(logBuffer.Len()))
+			})
+
+			t.Run("none", func(t *testing.T) {
+				var logBuffer bytes.Buffer
+
+				h := c.newHandler(&logBuffer)
+
+				l := slog.New(h)
+
+				for i := 0; i < numRecords; i++ {
+					l.Info("hello world", slog.Int("i", i))
+				}
+
+				t.Logf("wrote %s", humanSize(logBuffer.Len()))
+			})
+		})
 	}
 }
 
@@ -124,6 +255,28 @@ func ExampleNewHandler() {
 	)
 
 	logger.Info("example", slog.Int("something", 1))
+	// Output:
+	//
+}
+
+func ExampleNewHandler_GZIP() {
+	var logBuffer bytes.Buffer
+
+	w := gzip.NewWriter(&logBuffer)
+
+	logger := slog.New(slogproto.NewHandler(w))
+
+	logger.Info("hello world")
+
+	err := w.Flush()
+	if err != nil {
+		panic(err)
+	}
+
+	err = w.Close()
+	if err != nil {
+		panic(err)
+	}
 	// Output:
 	//
 }
@@ -595,4 +748,29 @@ func (r *replace) LogValue() slog.Value { return slog.AnyValue(r.v) }
 
 func (r *replace) String() string {
 	return fmt.Sprintf("<replace(%v)>", r.v)
+}
+
+// humanSize returns a human readable string of the given size.
+//
+// e.g. 1.2MB
+func humanSize(v int) string {
+	var unit string
+	var size float64
+
+	switch {
+	case v >= 1<<30:
+		unit = "GB"
+		size = float64(v) / (1 << 30)
+	case v >= 1<<20:
+		unit = "MB"
+		size = float64(v) / (1 << 20)
+	case v >= 1<<10:
+		unit = "KB"
+		size = float64(v) / (1 << 10)
+	default:
+		unit = "B"
+		size = float64(v)
+	}
+
+	return fmt.Sprintf("%.2f%s", size, unit)
 }
