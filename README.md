@@ -102,8 +102,8 @@ Using the following record written 1024 times:
 }
 ```
 
-| Format   | GZIP (KB)  | Snappy (KB) | Zstandard (KB) |  Uncompressed |
-|----------|------------|-------------|----------------|---------------|
-| Protobuf | 5.48       | 11.17       | 3.58           | 41.88         |
-| JSON     | 5.79       | 9.59        | 5.04           | 86.81         |
-| Text     | 2.93       | 7.66        | 1.31           | 69.92         |
+| Format   | GZIP (KB)  | Snappy (KB) | Zstandard (KB) |  Uncompressed (KB) |
+|----------|------------|-------------|----------------|--------------------|
+| Protobuf | 5.48       | 11.17       | 3.58           | 41.88              |
+| JSON     | 5.79       | 9.59        | 5.04           | 86.81              |
+| Text     | 2.93       | 7.66        | 1.31           | 69.92              |
