@@ -12,7 +12,9 @@ import (
 	"golang.org/x/exp/slog/slogtest"
 )
 
-func parseLogEntries(t *testing.T, data []byte) []map[string]any {
+var otherZero = time.Time{}.AddDate(1969, 0, 0)
+
+func parseLogEntriesForExternal(t *testing.T, data []byte) []map[string]any {
 	records := []map[string]any{}
 
 	err := slogproto.Read(context.Background(), bytes.NewReader(data), func(r *slog.Record) bool {
@@ -21,10 +23,67 @@ func parseLogEntries(t *testing.T, data []byte) []map[string]any {
 			slog.MessageKey: r.Message,
 			slog.TimeKey:    r.Time,
 		}
+
+		isZero := r.Time.IsZero()
+		if isZero || r.Time == otherZero {
+			delete(record, slog.TimeKey)
+		}
+
+		r.Attrs(func(a slog.Attr) bool {
+			// Handle groups by converting them to a map
+			if a.Value.Kind() == slog.KindGroup {
+				group := map[string]any{}
+				for _, a := range a.Value.Group() {
+					if a.Value.Kind() == slog.KindGroup {
+						nestedGroup := map[string]any{}
+						for _, a := range a.Value.Group() {
+							nestedGroup[a.Key] = a.Value.Any()
+						}
+						group[a.Key] = nestedGroup
+						continue
+					}
+
+					group[a.Key] = a.Value.Any()
+				}
+				record[a.Key] = group
+				return true
+			}
+
+			record[a.Key] = a.Value.Any()
+			return true
+		})
+
+		records = append(records, record)
+		return true
+	})
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	return records
+}
+
+func parseLogEntriesForInteral(t *testing.T, data []byte) []map[string]any {
+	records := []map[string]any{}
+
+	err := slogproto.Read(context.Background(), bytes.NewReader(data), func(r *slog.Record) bool {
+		record := map[string]any{
+			slog.TimeKey:    r.Time,
+			slog.LevelKey:   r.Level,
+			slog.MessageKey: r.Message,
+		}
+
+		isZero := r.Time.IsZero()
+		if isZero || r.Time == otherZero {
+			delete(record, slog.TimeKey)
+		}
+
 		r.Attrs(func(a slog.Attr) bool {
 			record[a.Key] = a.Value.Any()
 			return true
 		})
+
 		records = append(records, record)
 		return true
 	})
@@ -39,13 +98,15 @@ func parseLogEntries(t *testing.T, data []byte) []map[string]any {
 func TestHandler(t *testing.T) {
 	var logBuffer bytes.Buffer
 
+	h := slogproto.NewHandler(&logBuffer)
+
 	// TODO: fix "got 13 results, want 14"
-	err := slogtest.TestHandler(slogproto.NewHandler(&logBuffer), func() []map[string]any {
-		return parseLogEntries(t, logBuffer.Bytes())
+	err := slogtest.TestHandler(h, func() []map[string]any {
+		return parseLogEntriesForExternal(t, logBuffer.Bytes())
 	})
 
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 }
 
@@ -75,7 +136,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 
 		l.Info("message")
 
-		records := parseLogEntries(t, logBuffer.Bytes())
+		records := parseLogEntriesForInteral(t, logBuffer.Bytes())
 
 		if len(records) != 1 {
 			t.Fatalf("expected 1 record, got %d", len(records))
@@ -103,7 +164,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 
 		l.Info("message", "k", "v")
 
-		records := parseLogEntries(t, logBuffer.Bytes())
+		records := parseLogEntriesForInteral(t, logBuffer.Bytes())
 
 		if len(records) != 1 {
 			t.Fatalf("expected 1 record, got %d", len(records))
@@ -125,7 +186,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 
 		l.Info("msg", "a", "b", "", nil, "c", "d")
 
-		records := parseLogEntries(t, logBuffer.Bytes())
+		records := parseLogEntriesForInteral(t, logBuffer.Bytes())
 
 		if len(records) != 1 {
 			t.Fatalf("expected 1 record, got %d", len(records))
@@ -147,17 +208,24 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 
 		h := slogproto.NewHandler(&logBuffer)
 
+		time := time.Time{}
+
 		h.Handle(context.Background(), slog.Record{
-			Time:    time.Time{},
+			Time:    time,
 			Level:   slog.LevelInfo,
 			Message: "msg",
 			PC:      1,
 		})
 
-		records := parseLogEntries(t, logBuffer.Bytes())
+		records := parseLogEntriesForInteral(t, logBuffer.Bytes())
 
-		if len(records) != 0 {
-			t.Fatalf("expected 0 records, got %d", len(records))
+		if len(records) != 1 {
+			t.Fatalf("expected 1 records, got %d", len(records))
+		}
+
+		// record should not contain a slog.TimeKey
+		if records[0][slog.TimeKey] != nil {
+			t.Errorf("expected %s to be nil, got %v", slog.TimeKey, records[0][slog.TimeKey])
 		}
 	})
 
@@ -169,7 +237,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 
 		l.Info("msg", "a", "b", slog.Group("", slog.String("c", "d")), "e", "f")
 
-		records := parseLogEntries(t, logBuffer.Bytes())
+		records := parseLogEntriesForInteral(t, logBuffer.Bytes())
 
 		if len(records) != 1 {
 			t.Fatalf("expected 1 record, got %d records", len(records))
@@ -195,7 +263,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 
 		l.With("a", "b").Info("msg", "k", "v")
 
-		records := parseLogEntries(t, logBuffer.Bytes())
+		records := parseLogEntriesForInteral(t, logBuffer.Bytes())
 
 		if len(records) != 1 {
 			t.Fatalf("expected 1 record, got %d", len(records))
@@ -231,7 +299,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 
 		l.Info("msg", "a", "b", slog.Group("G", slog.String("c", "d")), "e", "f")
 
-		records := parseLogEntries(t, logBuffer.Bytes())
+		records := parseLogEntriesForInteral(t, logBuffer.Bytes())
 
 		if len(records) != 1 {
 			t.Fatalf("expected 1 record, got %d", len(records))
@@ -271,7 +339,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 
 		l.Info("msg", "a", "b", slog.Group("G"), "e", "f")
 
-		records := parseLogEntries(t, logBuffer.Bytes())
+		records := parseLogEntriesForInteral(t, logBuffer.Bytes())
 
 		if len(records) != 1 {
 			t.Fatalf("expected 1 record, got %d", len(records))
@@ -297,7 +365,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 
 		l.WithGroup("G").Info("msg", "a", "b")
 
-		records := parseLogEntries(t, logBuffer.Bytes())
+		records := parseLogEntriesForInteral(t, logBuffer.Bytes())
 
 		if len(records) != 1 {
 			t.Fatalf("expected 1 record, got %d", len(records))
@@ -336,7 +404,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 
 		l.With("a", "b").WithGroup("G").With("c", "d").WithGroup("H").Info("msg", "e", "f")
 
-		records := parseLogEntries(t, logBuffer.Bytes())
+		records := parseLogEntriesForInteral(t, logBuffer.Bytes())
 
 		if len(records) != 1 {
 			t.Fatalf("expected 1 record, got %d", len(records))
@@ -400,7 +468,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 
 		l.Info("msg", "k", &replace{"replaced"})
 
-		records := parseLogEntries(t, logBuffer.Bytes())
+		records := parseLogEntriesForInteral(t, logBuffer.Bytes())
 
 		if len(records) != 1 {
 			t.Fatalf("expected 1 record, got %d", len(records))
@@ -422,7 +490,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 				slog.String("a", "v1"),
 				slog.Any("b", &replace{"v2"})))
 
-		records := parseLogEntries(t, logBuffer.Bytes())
+		records := parseLogEntriesForInteral(t, logBuffer.Bytes())
 
 		if len(records) != 1 {
 			t.Fatalf("expected 1 record, got %d", len(records))
@@ -463,7 +531,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 		l = l.With("k", &replace{"replaced"})
 		l.Info("msg")
 
-		records := parseLogEntries(t, logBuffer.Bytes())
+		records := parseLogEntriesForInteral(t, logBuffer.Bytes())
 
 		if len(records) != 1 {
 			t.Fatalf("expected 1 record, got %d", len(records))
@@ -485,7 +553,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 			slog.Any("b", &replace{"v2"})))
 		l.Info("msg")
 
-		records := parseLogEntries(t, logBuffer.Bytes())
+		records := parseLogEntriesForInteral(t, logBuffer.Bytes())
 
 		if len(records) != 1 {
 			t.Fatalf("expected 1 record, got %d", len(records))

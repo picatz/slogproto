@@ -76,8 +76,8 @@ func (h *Handler) Enabled(ctx context.Context, level slog.Level) bool {
 //   - If a group has no Attrs (even if it has a non-empty key),
 //     ignore it.
 func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
-	// If the r.PC is zero or the r.Time is the zero time, ignore the record.
-	if r.PC == 0 || r.Time.IsZero() {
+	// If the r.PC is zero ignore the record.
+	if r.PC == 0 {
 		return nil
 	}
 
@@ -100,8 +100,6 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 	if err != nil {
 		return err
 	}
-
-	// fmt.Printf("proto record %d: %v\n\n", len(b), pbr)
 
 	// Write the length of the struct to the writer
 	// so that the reader knows how much to read.
@@ -321,8 +319,13 @@ func convertLevel(level slog.Level) Level {
 func (h *Handler) fillProtobufRecord(pbr *Record, slr *slog.Record) error {
 	pbr.Level = convertLevel(slr.Level)
 	pbr.Message = slr.Message
-	pbr.Time = timestamppb.New(slr.Time)
 	pbr.Attrs = make(map[string]*Value, slr.NumAttrs()+len(h.attrs))
+
+	timeIsZero := slr.Time.IsZero()
+
+	if !timeIsZero {
+		pbr.Time = timestamppb.New(slr.Time)
+	}
 
 	// Add the handler's attributes.
 	for i := 0; i < len(h.attrs); i++ {
