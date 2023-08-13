@@ -3,6 +3,7 @@ package slogproto_test
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -391,6 +392,180 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 			t.Errorf("expected a=b, got a=%v", records[0]["a"])
 		}
 
-		// TODO: other things
+		// Should have "c" attribute in "G" group
+		if records[0]["G"] == nil {
+			t.Errorf("expected G to be non-nil")
+		}
+
+		gAttrs := records[0]["G"].([]slog.Attr)
+
+		if len(gAttrs) != 2 {
+			t.Fatalf("expected 2 attribute, got %d", len(gAttrs))
+		}
+
+		for _, a := range gAttrs {
+			if a.Key == "c" {
+				if a.Value.String() != "d" {
+					t.Errorf("expected d, got %v", a.Value)
+				}
+			}
+
+			switch a.Key {
+			case "c":
+				if a.Value.String() != "d" {
+					t.Errorf("expected d, got %v", a.Value)
+				}
+			case "H":
+				hAttrs := a.Value.Group()
+				if len(hAttrs) != 1 {
+					t.Fatalf("expected 1 attribute, got %d", len(hAttrs))
+				}
+
+				if hAttrs[0].Key != "e" {
+					t.Errorf("expected e, got %v", hAttrs[0].Key)
+				}
+
+				if hAttrs[0].Value.String() != "f" {
+					t.Errorf("expected f, got %v", hAttrs[0].Value)
+				}
+			default:
+				t.Errorf("unexpected attribute: %v", a)
+			}
+		}
 	})
+
+	t.Run("a Handler should call Resolve on attribute values", func(t *testing.T) {
+		var logBuffer bytes.Buffer
+
+		l := slog.New(slogproto.NewHandler(&logBuffer))
+
+		l.Info("msg", "k", &replace{"replaced"})
+
+		records := parseLogEntries(t, logBuffer.Bytes())
+
+		if len(records) != 1 {
+			t.Fatalf("expected 1 record, got %d", len(records))
+		}
+
+		// should have k with value "replaced"
+		if records[0]["k"] != "replaced" {
+			t.Errorf("expected k=replaced, got k=%v", records[0]["k"])
+		}
+	})
+
+	t.Run("a Handler should call Resolve on attribute values in groups", func(t *testing.T) {
+		var logBuffer bytes.Buffer
+
+		l := slog.New(slogproto.NewHandler(&logBuffer))
+
+		l.Info("msg",
+			slog.Group("G",
+				slog.String("a", "v1"),
+				slog.Any("b", &replace{"v2"})))
+
+		records := parseLogEntries(t, logBuffer.Bytes())
+
+		if len(records) != 1 {
+			t.Fatalf("expected 1 record, got %d", len(records))
+		}
+
+		// G should have a with value "v1", and b with value "v2"
+		if records[0]["G"] == nil {
+			t.Errorf("expected G to be non-nil")
+		}
+
+		gAttrs := records[0]["G"].([]slog.Attr)
+
+		if len(gAttrs) != 2 {
+			t.Fatalf("expected 2 attribute, got %d", len(gAttrs))
+		}
+
+		for _, a := range gAttrs {
+			switch a.Key {
+			case "a":
+				if a.Value.String() != "v1" {
+					t.Errorf("expected v1, got %v", a.Value)
+				}
+			case "b":
+				if a.Value.String() != "v2" {
+					t.Errorf("expected v2, got %v", a.Value)
+				}
+			default:
+				t.Errorf("unexpected attribute: %v", a)
+			}
+		}
+	})
+
+	t.Run("a Handler should call Resolve on attribute values from WithAttrs", func(t *testing.T) {
+		var logBuffer bytes.Buffer
+
+		l := slog.New(slogproto.NewHandler(&logBuffer))
+
+		l = l.With("k", &replace{"replaced"})
+		l.Info("msg")
+
+		records := parseLogEntries(t, logBuffer.Bytes())
+
+		if len(records) != 1 {
+			t.Fatalf("expected 1 record, got %d", len(records))
+		}
+
+		// should have k with value "replaced"
+		if records[0]["k"] != "replaced" {
+			t.Errorf("expected k=replaced, got k=%v", records[0]["k"])
+		}
+	})
+
+	t.Run("a Handler should call Resolve on attribute values in groups from WithAttrs", func(t *testing.T) {
+		var logBuffer bytes.Buffer
+
+		l := slog.New(slogproto.NewHandler(&logBuffer))
+
+		l = l.With(slog.Group("G",
+			slog.String("a", "v1"),
+			slog.Any("b", &replace{"v2"})))
+		l.Info("msg")
+
+		records := parseLogEntries(t, logBuffer.Bytes())
+
+		if len(records) != 1 {
+			t.Fatalf("expected 1 record, got %d", len(records))
+		}
+
+		// G should have a with value "v1", and b with value "v2"
+		if records[0]["G"] == nil {
+			t.Errorf("expected G to be non-nil")
+		}
+
+		gAttrs := records[0]["G"].([]slog.Attr)
+
+		if len(gAttrs) != 2 {
+			t.Fatalf("expected 2 attribute, got %d", len(gAttrs))
+		}
+
+		for _, a := range gAttrs {
+			switch a.Key {
+			case "a":
+				if a.Value.String() != "v1" {
+					t.Errorf("expected v1, got %v", a.Value)
+				}
+			case "b":
+				if a.Value.String() != "v2" {
+					t.Errorf("expected v2, got %v", a.Value)
+				}
+			default:
+				t.Errorf("unexpected attribute: %v", a)
+			}
+		}
+	})
+}
+
+type replace struct {
+	v any
+}
+
+func (r *replace) LogValue() slog.Value { return slog.AnyValue(r.v) }
+
+func (r *replace) String() string {
+	return fmt.Sprintf("<replace(%v)>", r.v)
 }

@@ -140,7 +140,7 @@ func fromPBValue(v *Value) (slog.Value, error) {
 		return slog.Uint64Value(uint64(v.GetUint())), nil
 	case *Value_Any:
 		return slog.AnyValue(v.GetAny()), nil
-	case *Value_Group:
+	case *Value_Group_:
 		attrs := make([]slog.Attr, 0, len(v.GetGroup().GetAttrs()))
 
 		for k, v := range v.GetGroup().GetAttrs() {
@@ -158,6 +158,8 @@ func fromPBValue(v *Value) (slog.Value, error) {
 		}
 
 		return slog.GroupValue(attrs...), nil
+	case nil:
+		return slog.Value{}, nil
 	default:
 		return slog.Value{}, fmt.Errorf("unsupported value type: %T", v.Kind)
 	}

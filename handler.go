@@ -32,9 +32,12 @@ var recordPool = sync.Pool{
 // record, including the levem, message and attributes.
 type Handler struct {
 	w     io.Writer
-	group string
 	attrs []slog.Attr
 	level slog.Level
+
+	parent    *Handler
+	group     *Value_Group
+	groupName string
 }
 
 // NewHandler returns a new Handler that writes to the writer.
@@ -113,16 +116,99 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 	return err
 }
 
-// WithAttrs returns the handler unchanged, as it does not support attributes.
+// WithAttrs returns a new Handler whose attributes consist of
+// both the receiver's attributes and the arguments.
+//
+// The Handler owns the slice: it may retain, modify or discard it.
 func (h *Handler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	h.attrs = append(h.attrs, attrs...)
-	return h
+	// New handler
+	newHandler := &Handler{
+		w:      h.w,
+		level:  h.level,
+		attrs:  h.attrs,
+		parent: h,
+	}
+
+	// If in a group, add the attributes to the group.
+	if h.group != nil {
+		for i := 0; i < len(attrs); i++ {
+			v, err := getValue(attrs[i].Key, attrs[i].Value)
+			if err != nil {
+				panic(err)
+			}
+			h.group.Attrs[attrs[i].Key] = v
+		}
+
+		// Set the new handler's group to the existing group.
+		newHandler.group = h.group
+		newHandler.groupName = h.groupName
+	} else {
+		// Otherwise, add the attributes to the handler.
+		newHandler.attrs = append(newHandler.attrs, attrs...)
+	}
+
+	return newHandler
 }
 
-// WithGroup returns the handler unchanged, as it does not support groups.
+// WithGroup returns a new Handler with the given group appended to
+// the receiver's existing groups.
+//
+// The keys of all subsequent attributes, whether added by With or in a
+// Record, should be qualified by the sequence of group names.
+//
+// How this qualification happens is up to the Handler, so long as
+// this Handler's attribute keys differ from those of another Handler
+// with a different sequence of group names.
+//
+// A Handler should treat WithGroup as starting a Group of Attrs that ends
+// at the end of the log event. That is,
+//
+//	logger.WithGroup("s").LogAttrs(level, msg, slog.Int("a", 1), slog.Int("b", 2))
+//
+// should behave like
+//
+//	logger.LogAttrs(level, msg, slog.Group("s", slog.Int("a", 1), slog.Int("b", 2)))
+//
+// If the name is empty, WithGroup returns the receiver.
 func (h *Handler) WithGroup(name string) slog.Handler {
-	h.group = name
-	return h
+	if name == "" {
+		return h
+	}
+
+	// Create a copy of the attributes.
+	attrsCopy := make([]slog.Attr, len(h.attrs))
+	copy(attrsCopy, h.attrs)
+
+	// New handler
+	newHandler := &Handler{
+		w:         h.w,
+		attrs:     attrsCopy,
+		level:     h.level,
+		parent:    h,
+		groupName: name,
+	}
+
+	// New group
+	newGroup := &Value_Group{
+		Attrs: make(map[string]*Value),
+	}
+
+	// If there is already a group, embed the new group in the existing group.
+	if h.parent != nil && h.parent.group != nil {
+		h.parent.group.Attrs[name] = &Value{
+			Kind: &Value_Group_{
+				Group: newGroup,
+			},
+		}
+
+		// Set the new handler's group to the existing group.
+		newHandler.group = newGroup
+	} else {
+		// Otherwise, set the new group as the handler's group.
+		newHandler.group = newGroup
+	}
+
+	return newHandler
 }
 
 // getValue converts a slog.Value to a slogproto Value.
@@ -186,8 +272,7 @@ func getValue(group string, value slog.Value) (*Value, error) {
 	case slog.KindGroup:
 		attrs := value.Group()
 
-		g := &Group{
-			Name:  group,
+		g := &Value_Group{
 			Attrs: make(map[string]*Value, len(attrs)),
 		}
 
@@ -205,7 +290,7 @@ func getValue(group string, value slog.Value) (*Value, error) {
 		}
 
 		return &Value{
-			Kind: &Value_Group{
+			Kind: &Value_Group_{
 				Group: g,
 			},
 		}, nil
@@ -237,61 +322,78 @@ func (h *Handler) fillProtobufRecord(pbr *Record, slr *slog.Record) error {
 	pbr.Level = convertLevel(slr.Level)
 	pbr.Message = slr.Message
 	pbr.Time = timestamppb.New(slr.Time)
-	pbr.Attrs = make(map[string]*Value, slr.NumAttrs())
+	pbr.Attrs = make(map[string]*Value, slr.NumAttrs()+len(h.attrs))
 
-	currentAttrs := pbr.Attrs
-
-	if h.group != "" {
-		pbr.Attrs[h.group] = &Value{
-			Kind: &Value_Group{
-				Group: &Group{
-					Name:  h.group,
-					Attrs: map[string]*Value{},
-				},
-			},
+	// Add the handler's attributes.
+	for i := 0; i < len(h.attrs); i++ {
+		// If the key is empty, skip it.
+		if h.attrs[i].Key == "" {
+			continue
 		}
-		currentAttrs = pbr.Attrs[h.group].GetGroup().Attrs
+
+		v, err := getValue(h.attrs[i].Key, h.attrs[i].Value)
+		if err != nil {
+			return err
+		}
+		pbr.Attrs[h.attrs[i].Key] = v
 	}
 
+	// Add the record's attributes.
 	var err error
-	slr.Attrs(func(a slog.Attr) bool {
-		var v *Value
+	slr.Attrs(func(attr slog.Attr) bool {
+		// If the key is empty, skip it.
+		if attr.Key == "" {
+			return true
+		}
 
-		v, err = getValue(a.Key, a.Value)
+		var v *Value
+		v, err = getValue(attr.Key, attr.Value)
 		if err != nil {
 			return false
 		}
 
+		// Skip the empty group.
 		if v == nil {
 			return true
 		}
 
-		// If value is a group, and group name is empty, inline the group's Attrs.
-		if v.GetGroup() != nil && v.GetGroup().Name == "" {
-			for k, v := range v.GetGroup().Attrs {
-				currentAttrs[k] = v
-			}
-			return true
+		if h.group != nil {
+			h.group.Attrs[attr.Key] = v
+		} else {
+			pbr.Attrs[attr.Key] = v
 		}
 
-		currentAttrs[a.Key] = v
 		return true
 	})
+	if err != nil {
+		return err
+	}
 
-	// If there are any attrs that are in the handler, but not in the record,
-	// then add them to the record.
-	for _, attr := range h.attrs {
-		if _, ok := currentAttrs[attr.Key]; !ok {
-			v, err := getValue(attr.Key, attr.Value)
-			if err != nil {
-				return err
+	// Add the group to the record.
+	if h.group != nil {
+		// If there is a parent, add the group to the parent.
+		if h.parent != nil && h.parent.group != nil {
+			h.parent.group.Attrs[h.groupName] = &Value{
+				Kind: &Value_Group_{
+					Group: h.group,
+				},
 			}
-			currentAttrs[attr.Key] = v
+		} else {
+			pbr.Attrs[h.groupName] = &Value{
+				Kind: &Value_Group_{
+					Group: h.group,
+				},
+			}
 		}
 	}
 
-	if err != nil {
-		return fmt.Errorf("slogproto: error converting slog.Value to anypb.Any: %w", err)
+	// Add the parent's group to the record.
+	if h.parent != nil && h.parent.group != nil {
+		pbr.Attrs[h.parent.groupName] = &Value{
+			Kind: &Value_Group_{
+				Group: h.parent.group,
+			},
+		}
 	}
 
 	return nil

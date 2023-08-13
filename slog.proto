@@ -17,6 +17,9 @@ enum Level {
 }
 
 message Value {
+    message Group {
+        map<string, Value> attrs = 1;
+    }
     oneof kind {
         bool bool = 1;
         double float = 2;
@@ -28,11 +31,6 @@ message Value {
         Group group = 8;
         google.protobuf.Any any = 9;
     }
-}
-
-message Group {
-    string name = 1;
-    map<string, Value> attrs = 2;
 }
 
 message Record {
