@@ -16,7 +16,7 @@ $ go get -u -v github.com/picatz/slogproto@latest
 To use the `slp` CLI:
 
 ```console
-$ go install -u -v github.com/picatz/slogproto/cmd/slp@latest
+$ go install -v github.com/picatz/slogproto/cmd/slp@latest
 ```
 
 ## Usage
