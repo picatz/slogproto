@@ -341,8 +341,26 @@ func (h *Handler) fillProtobufRecord(pbr *Record, slr *slog.Record) error {
 	// Add the record's attributes.
 	var err error
 	slr.Attrs(func(attr slog.Attr) bool {
-		// If the key is empty, skip it.
+		// If the key is empty, skip it, unless it is a group.
+		// If it is a group, we want to add it to the record.
 		if attr.Key == "" {
+			if attr.Value.Kind() == slog.KindGroup {
+				var v *Value
+				v, err = getValue(attr.Key, attr.Value)
+				if err != nil {
+					return false
+				}
+
+				// Skip the empty group.
+				if v == nil {
+					return true
+				}
+
+				for k, v := range v.GetGroup().Attrs {
+					pbr.Attrs[k] = v
+				}
+				return true
+			}
 			return true
 		}
 

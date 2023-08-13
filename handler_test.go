@@ -67,74 +67,6 @@ func ExampleNewHandler() {
 	//
 }
 
-func TestGroupAttrs(t *testing.T) {
-	var logBuffer bytes.Buffer
-
-	l := slog.New(slogproto.NewHandler(&logBuffer))
-
-	l.Info("msg", "a", "b", slog.Group("", slog.String("c", "d")), "e", "f")
-
-	records := parseLogEntries(t, logBuffer.Bytes())
-
-	if len(records) != 1 {
-		t.Fatalf("expected 1 record, got %d", len(records))
-	}
-
-	if records[0]["a"] != "b" {
-		t.Errorf("expected a=b, got a=%v", records[0]["a"])
-	}
-
-	if records[0]["e"] != "f" {
-		t.Errorf("expected e=f, got e=%v", records[0]["e"])
-	}
-
-	if records[0]["c"] != "d" {
-		t.Errorf("expected c=d, got c=%v", records[0]["c"])
-	}
-
-	t.Logf("record: %v", records[0])
-}
-
-func TestWithGroup(t *testing.T) {
-	var logBuffer bytes.Buffer
-
-	l := slog.New(slogproto.NewHandler(&logBuffer))
-
-	l.WithGroup("G").Info("msg", "a", "b")
-
-	records := parseLogEntries(t, logBuffer.Bytes())
-
-	if len(records) != 1 {
-		t.Fatalf("expected 1 record, got %d", len(records))
-	}
-
-	// Should not have "a" without a group
-	if records[0]["a"] != nil {
-		t.Errorf("expected a=nil, got a=%v", records[0]["a"])
-	}
-
-	// Should have "a" with a group
-	if records[0]["G"] == nil {
-		t.Errorf("expected G to be non-nil")
-	}
-
-	gAttrs := records[0]["G"].([]slog.Attr)
-
-	if len(gAttrs) != 1 {
-		t.Fatalf("expected 1 attribute, got %d", len(gAttrs))
-	}
-
-	if gAttrs[0].Key != "a" {
-		t.Errorf("expected a, got %v", gAttrs[0].Key)
-	}
-
-	if gAttrs[0].Value.String() != "b" {
-		t.Errorf("expected b, got %v", gAttrs[0].Value)
-	}
-
-	t.Logf("record: %v", records[0])
-}
-
 func TestHandler_verbose_test_suite(t *testing.T) {
 	t.Run("this test expects slog.TimeKey, slog.LevelKey and slog.MessageKey", func(t *testing.T) {
 		var logBuffer bytes.Buffer
@@ -226,6 +158,33 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 
 		if len(records) != 0 {
 			t.Fatalf("expected 0 records, got %d", len(records))
+		}
+	})
+
+	t.Run("a Handler should inline the Attrs of a group with an empty key", func(t *testing.T) {
+
+		var logBuffer bytes.Buffer
+
+		l := slog.New(slogproto.NewHandler(&logBuffer))
+
+		l.Info("msg", "a", "b", slog.Group("", slog.String("c", "d")), "e", "f")
+
+		records := parseLogEntries(t, logBuffer.Bytes())
+
+		if len(records) != 1 {
+			t.Fatalf("expected 1 record, got %d records", len(records))
+		}
+
+		if records[0]["a"] != "b" {
+			t.Errorf("expected a=b, got a=%v", records[0]["a"])
+		}
+
+		if records[0]["e"] != "f" {
+			t.Errorf("expected e=f, got e=%v", records[0]["e"])
+		}
+
+		if records[0]["c"] != "d" {
+			t.Errorf("expected c=d, got c=%v", records[0]["c"])
 		}
 	})
 
