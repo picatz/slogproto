@@ -19,9 +19,7 @@ import (
 func filterExprProgram(filterExpr string) (cel.Program, error) {
 	// Create a CEL environment.
 	env, err := cel.NewEnv(
-		// cel.Types(&slogproto.Record{}),
 		cel.Declarations(
-			// Add record variable.
 			decls.NewVar("msg", decls.String),
 			decls.NewVar("level", decls.Int),
 			decls.NewVar("time", decls.Timestamp),
@@ -107,13 +105,14 @@ func main() {
 	// TDOUT in JSON format.
 	err := slogproto.Read(context.Background(), r, func(r *slog.Record) bool {
 		if filterProg != nil {
-			attrsMap := map[string]interface{}{}
+			attrsMap := make(map[string]any, r.NumAttrs())
+
 			r.Attrs(func(a slog.Attr) bool {
 				attrsMap[a.Key] = a.Value.Any()
 				return true
 			})
 
-			out, _, err := filterProg.Eval(map[string]interface{}{
+			out, _, err := filterProg.Eval(map[string]any{
 				"msg":   r.Message,
 				"level": r.Level,
 				"time":  r.Time,
