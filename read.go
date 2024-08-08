@@ -11,6 +11,12 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// Read reads protobuf encoded slog records from the reader and calls the
+// provided function for each record. If the function returns false, the
+// iteration is stopped.
+//
+// If the context is canceled, the iteration is stopped and the error is
+// returned. If the reader returns an error, the error is returned.
 func Read(ctx context.Context, r io.Reader, fn func(r *slog.Record) bool) error {
 	// Create a new scanner to read from the reader.
 	scanner := bufio.NewScanner(r)
