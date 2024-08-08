@@ -24,7 +24,10 @@ func TestRead(t *testing.T) {
 		logger.Info("this is a test", "test", i)
 	}
 
-	fh.Close()
+	err = fh.Close()
+	if err != nil {
+		t.Fatalf("expected no error, but got: %v", err)
+	}
 
 	fh, err = os.Open(filepath.Join(tmpDir, "test.log"))
 	if err != nil {
