@@ -259,7 +259,7 @@ func ExampleNewHandler() {
 	//
 }
 
-func ExampleNewHandler_GZIP() {
+func ExampleNewHandler_gzip() {
 	var logBuffer bytes.Buffer
 
 	w := gzip.NewWriter(&logBuffer)
