@@ -6,14 +6,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"testing"
+	"testing/slogtest"
 	"time"
 
 	"github.com/golang/snappy"
 	"github.com/klauspost/compress/zstd"
 	"github.com/picatz/slogproto"
-	"golang.org/x/exp/slog"
-	"golang.org/x/exp/slog/slogtest"
 )
 
 var otherZero = time.Time{}.AddDate(1969, 0, 0)

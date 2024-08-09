@@ -6,8 +6,8 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log/slog"
 
-	"golang.org/x/exp/slog"
 	"google.golang.org/protobuf/proto"
 )
 

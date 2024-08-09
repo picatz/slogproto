@@ -3,12 +3,12 @@ package slogproto_test
 import (
 	"context"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/picatz/slogproto"
-	"golang.org/x/exp/slog"
 )
 
 func setupTestLog(t *testing.T, recordsCount int) *os.File {

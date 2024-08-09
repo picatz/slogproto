@@ -10,9 +10,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"sync"
 
-	"golang.org/x/exp/slog"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
@@ -31,13 +31,15 @@ var recordPool = sync.Pool{
 // to the writer as a protocol buffer encoded struct containing the log
 // record, including the levem, message and attributes.
 type Handler struct {
-	w     io.Writer
 	attrs []slog.Attr
 	level slog.Level
 
 	parent    *Handler
 	group     *Value_Group
 	groupName string
+
+	mu *sync.Mutex
+	w  io.Writer
 }
 
 // NewHandler returns a new Handler that writes to the writer.
@@ -47,7 +49,8 @@ type Handler struct {
 //	h := slogproto.NewHandler(os.Stdout)
 func NewHandler(w io.Writer) *Handler {
 	return &Handler{
-		w: w,
+		mu: &sync.Mutex{},
+		w:  w,
 	}
 }
 
@@ -101,6 +104,9 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 		return err
 	}
 
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
 	// Write the length of the struct to the writer
 	// so that the reader knows how much to read.
 	buf := make([]byte, 4)
@@ -121,6 +127,7 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 func (h *Handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	// New handler
 	newHandler := &Handler{
+		mu:     h.mu,
 		w:      h.w,
 		level:  h.level,
 		attrs:  h.attrs,
@@ -179,6 +186,7 @@ func (h *Handler) WithGroup(name string) slog.Handler {
 
 	// New handler
 	newHandler := &Handler{
+		mu:        h.mu,
 		w:         h.w,
 		attrs:     attrsCopy,
 		level:     h.level,
