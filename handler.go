@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"runtime"
 	"sync"
 
 	"google.golang.org/protobuf/proto"
@@ -31,15 +32,13 @@ var recordPool = sync.Pool{
 // to the writer as a protocol buffer encoded struct containing the log
 // record, including the levem, message and attributes.
 type Handler struct {
-	attrs []slog.Attr
-	level slog.Level
-
+	opts      *slog.HandlerOptions
+	attrs     []slog.Attr
 	parent    *Handler
 	group     *Value_Group
 	groupName string
-
-	mu *sync.Mutex
-	w  io.Writer
+	mu        *sync.Mutex
+	w         io.Writer
 }
 
 // NewHandler returns a new Handler that writes to the writer.
@@ -47,16 +46,24 @@ type Handler struct {
 // # Example
 //
 //	h := slogproto.NewHandler(os.Stdout)
-func NewHandler(w io.Writer) *Handler {
+func NewHandler(w io.Writer, opts *slog.HandlerOptions) *Handler {
+	if opts == nil {
+		opts = &slog.HandlerOptions{
+			Level:     slog.LevelInfo,
+			AddSource: false,
+		}
+	}
+
 	return &Handler{
-		mu: &sync.Mutex{},
-		w:  w,
+		opts: opts,
+		mu:   &sync.Mutex{},
+		w:    w,
 	}
 }
 
 // Enabled returns true if the level is enabled for the handler.
 func (h *Handler) Enabled(ctx context.Context, level slog.Level) bool {
-	return level <= h.level
+	return level <= h.opts.Level.Level()
 }
 
 // Handle writes the log record to the writer as a protocol buffer encoded
@@ -80,8 +87,10 @@ func (h *Handler) Enabled(ctx context.Context, level slog.Level) bool {
 //     ignore it.
 func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 	// If the r.PC is zero ignore the record.
-	if r.PC == 0 {
-		return nil
+	if r.PC != 0 && h.opts.AddSource {
+		fs := runtime.CallersFrames([]uintptr{r.PC})
+		f, _ := fs.Next()
+		h.attrs = append(h.attrs, slog.String(slog.SourceKey, fmt.Sprintf("%s:%d", f.File, f.Line)))
 	}
 
 	// Get a protobuf record from the pool.
@@ -129,7 +138,7 @@ func (h *Handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	newHandler := &Handler{
 		mu:     h.mu,
 		w:      h.w,
-		level:  h.level,
+		opts:   h.opts,
 		attrs:  h.attrs,
 		parent: h,
 	}
@@ -189,7 +198,7 @@ func (h *Handler) WithGroup(name string) slog.Handler {
 		mu:        h.mu,
 		w:         h.w,
 		attrs:     attrsCopy,
-		level:     h.level,
+		opts:      h.opts,
 		parent:    h,
 		groupName: name,
 	}

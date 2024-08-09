@@ -21,7 +21,7 @@ func setupTestLog(t *testing.T, recordsCount int) *os.File {
 		t.Fatalf("failed to create test log file: %v", err)
 	}
 
-	logger := slog.New(slogproto.NewHandler(fh))
+	logger := slog.New(slogproto.NewHandler(fh, nil))
 
 	for i := 0; i < recordsCount; i++ {
 		logger.Info("this is a test", "test", i)
