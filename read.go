@@ -115,13 +115,13 @@ func Read(ctx context.Context, r io.Reader, fn func(r *slog.Record) bool) error 
 
 func fromPBLevel(l Level) slog.Level {
 	switch l {
-	case Level_Info:
+	case Level_LEVEL_INFO:
 		return slog.LevelInfo
-	case Level_Warn:
+	case Level_LEVEL_WARN:
 		return slog.LevelWarn
-	case Level_Error:
+	case Level_LEVEL_ERROR:
 		return slog.LevelError
-	case Level_Debug:
+	case Level_LEVEL_DEBUG:
 		return slog.LevelDebug
 	default:
 		return slog.LevelInfo

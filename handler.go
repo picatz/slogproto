@@ -307,19 +307,26 @@ func getValue(group string, value slog.Value) (*Value, error) {
 	}
 }
 
+const (
+	LevelInfo  = Level_LEVEL_INFO
+	LevelWarn  = Level_LEVEL_WARN
+	LevelError = Level_LEVEL_ERROR
+	LevelDebug = Level_LEVEL_DEBUG
+)
+
 // convertLevel converts a slog.Level to a slogproto Level.
 func convertLevel(level slog.Level) Level {
 	switch level {
 	case slog.LevelInfo:
-		return Level_Info
+		return Level_LEVEL_INFO
 	case slog.LevelWarn:
-		return Level_Warn
+		return Level_LEVEL_WARN
 	case slog.LevelError:
-		return Level_Error
+		return Level_LEVEL_ERROR
 	case slog.LevelDebug:
-		return Level_Debug
+		return Level_LEVEL_DEBUG
 	default:
-		return Level_Info
+		return Level_LEVEL_INFO
 	}
 }
 
