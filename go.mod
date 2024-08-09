@@ -1,6 +1,6 @@
 module github.com/picatz/slogproto
 
-go 1.19
+go 1.22.6
 
 require (
 	github.com/golang/snappy v0.0.4
