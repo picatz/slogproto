@@ -27,10 +27,10 @@ $ go install -v github.com/picatz/slogproto/cmd/slp@latest
 package main
 
 import (
+	"log/slog"
 	"os"
 
 	"github.com/picatz/slogproto"
-	"golang.org/x/exp/slog"
 )
 
 func main() {
