@@ -64,6 +64,9 @@ $ slp output.log
 
 The filter flag can be used to filter logs using a given expression. The expression is evaluated against the [`slog.Record`](https://pkg.go.dev/golang.org/x/exp/slog#Record) and must return a boolean value. For each log record that the expression evaluates as `true` will be output to STDOUT as JSON.
 
+* `msg` is the message in the log record.
+* `level` is the level in the log record.
+* `time` is the timestamp in the log record.
 * `attrs` is a map of all the attributes in the log record, not including the message, level, or time.
 	```javascript
 	attrs.something == 1
@@ -71,12 +74,9 @@ The filter flag can be used to filter logs using a given expression. The express
 	```javascript
 	has(attrs.something) && attrs.something == 1
 	```
-	> [!IMPORTANT]
-	> Invalid access to an attribute will cause the filter to fail at evaluation time. Invalid expressions (which do not evaluate to a boolean) will be checked before reading the log records, and will cause the program to exit with an error message.
-	
-* `msg` is the message in the log record.
-* `level` is the level in the log record.
-* `time` is the timestamp in the log record.
+
+> [!IMPORTANT]
+> Invalid access to an attribute will cause the filter to fail at evaluation time. Invalid expressions (which do not evaluate to a boolean) will be checked before reading the log records, and will cause the program to exit with an error message.
 
 ```console
 $ slp --filter='has(attrs.something)' output.log
