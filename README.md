@@ -68,11 +68,15 @@ The filter flag can be used to filter logs using a given expression. The express
 * `level` is the level in the log record.
 * `time` is the timestamp in the log record.
 * `attrs` is a map of all the attributes in the log record, not including the message, level, or time.
+
 	```javascript
 	attrs.something == 1
 	```
 	```javascript
 	has(attrs.something) && attrs.something == 1
+	```
+	```javascript
+	attrs.?something.orValue(0) == 1
 	```
 
 > [!IMPORTANT]
