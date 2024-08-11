@@ -57,7 +57,7 @@ $ slp output.log
 ...
 ```
 
-> **Note**
+> [!NOTE]
 > Input to `slp` can be from STDIN or a file.
 
 #### Filtering
