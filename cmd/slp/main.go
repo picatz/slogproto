@@ -97,9 +97,13 @@ var rootCmd = &cobra.Command{
 }
 
 func compileFilter(expr string) (cel.Program, error) {
+	if expr == "" {
+		return nil, nil
+	}
+
 	filterProg, err := slogproto.CompileFilter(expr)
 	if err != nil {
-		return nil, fmt.Errorf("error compiling filter expression: %w", err)
+		return nil, err
 	}
 
 	return filterProg, nil

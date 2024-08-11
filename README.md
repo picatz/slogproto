@@ -65,10 +65,10 @@ $ slp output.log
 The filter flag can be used to filter logs using a given expression. The expression is evaluated against the [`slog.Record`](https://pkg.go.dev/golang.org/x/exp/slog#Record) and must return a boolean value. For each log record that the expression evaluates as `true` will be output to STDOUT as JSON.
 
 * `attrs` is a map of all the attributes in the log record, not including the message, level, or time.
-	```cel
+	```javacript
 	attrs.something == 1
 	```
-	```cel
+	```javacript
 	has(attrs.something) && attrs.something == 1
 	```
 	> **Important**

@@ -39,7 +39,7 @@ func CompileFilter(expr string) (cel.Program, error) {
 		ext.Sets(),
 		ext.Lists(),
 		ext.Bindings(),
-		cel.OptionalTypes(cel.OptionalTypesVersion(1)),
+		cel.OptionalTypes(cel.OptionalTypesVersion(2)),
 		cel.Variable("msg", cel.StringType),
 		cel.Variable("level", cel.StringType),
 		cel.Variable("time", cel.TimestampType),
