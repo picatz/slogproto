@@ -71,8 +71,8 @@ The filter flag can be used to filter logs using a given expression. The express
 	```javascript
 	has(attrs.something) && attrs.something == 1
 	```
-	> **Important**
-	> Invalid access to an attribute will cause the filter to fail at evaluation time. Wrap the expression in a `has()` function to check if the attribute exists before accessing it.
+	> [!IMPORTANT]
+	> Invalid access to an attribute will cause the filter to fail at evaluation time. Invalid expressions (which do not evaluate to a boolean) will be checked before reading the log records, and will cause the program to exit with an error message.
 	
 * `msg` is the message in the log record.
 * `level` is the level in the log record.
