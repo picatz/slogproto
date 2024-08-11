@@ -7,7 +7,7 @@ require (
 	github.com/google/cel-go v0.17.1
 	github.com/klauspost/compress v1.16.7
 	github.com/spf13/cobra v1.8.1
-	google.golang.org/protobuf v1.31.0
+	google.golang.org/protobuf v1.33.0
 )
 
 require (
