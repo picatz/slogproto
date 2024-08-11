@@ -6,11 +6,17 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"log/slog"
 
-	"golang.org/x/exp/slog"
 	"google.golang.org/protobuf/proto"
 )
 
+// Read reads protobuf encoded slog records from the reader and calls the
+// provided function for each record. If the function returns false, the
+// iteration is stopped.
+//
+// If the context is canceled, the iteration is stopped and the error is
+// returned. If the reader returns an error, the error is returned.
 func Read(ctx context.Context, r io.Reader, fn func(r *slog.Record) bool) error {
 	// Create a new scanner to read from the reader.
 	scanner := bufio.NewScanner(r)
@@ -109,13 +115,13 @@ func Read(ctx context.Context, r io.Reader, fn func(r *slog.Record) bool) error 
 
 func fromPBLevel(l Level) slog.Level {
 	switch l {
-	case Level_Info:
+	case Level_LEVEL_INFO:
 		return slog.LevelInfo
-	case Level_Warn:
+	case Level_LEVEL_WARN:
 		return slog.LevelWarn
-	case Level_Error:
+	case Level_LEVEL_ERROR:
 		return slog.LevelError
-	case Level_Debug:
+	case Level_LEVEL_DEBUG:
 		return slog.LevelDebug
 	default:
 		return slog.LevelInfo

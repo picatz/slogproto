@@ -2,38 +2,53 @@ package slogproto_test
 
 import (
 	"context"
+	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/picatz/slogproto"
-	"golang.org/x/exp/slog"
 )
 
-func TestRead(t *testing.T) {
+func setupTestLog(t *testing.T, recordsCount int) *os.File {
+	t.Helper()
+
 	tmpDir := t.TempDir()
 
-	fh, err := os.OpenFile(filepath.Join(tmpDir, "test.log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
+	fh, err := os.Create(filepath.Join(tmpDir, "test.log"))
 	if err != nil {
-		t.Fatalf("expected no error, but got: %v", err)
+		t.Fatalf("failed to create test log file: %v", err)
 	}
 
-	logger := slog.New(slogproto.NewHandler(fh))
+	logger := slog.New(slogproto.NewHandler(fh, nil))
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < recordsCount; i++ {
 		logger.Info("this is a test", "test", i)
 	}
 
-	fh.Close()
-
-	fh, err = os.Open(filepath.Join(tmpDir, "test.log"))
+	_, err = fh.Seek(0, io.SeekStart)
 	if err != nil {
 		t.Fatalf("expected no error, but got: %v", err)
 	}
+	t.Cleanup(func() {
+		err := fh.Close()
+		if err != nil {
+			t.Fatalf("expected no error, but got: %v", err)
+		}
+	})
+
+	return fh
+}
+
+func TestRead(t *testing.T) {
+	numberOfRecords := 100
+
+	fh := setupTestLog(t, numberOfRecords)
 
 	count := 0
 
-	err = slogproto.Read(context.Background(), fh, func(r *slog.Record) bool {
+	err := slogproto.Read(context.Background(), fh, func(r *slog.Record) bool {
 		count++
 
 		if r.Message != "this is a test" {
@@ -58,7 +73,7 @@ func TestRead(t *testing.T) {
 		t.Fatalf("error reading file: %v", err)
 	}
 
-	if count != 100 {
+	if count != numberOfRecords {
 		t.Fatalf("expected 100 records, but got: %d", count)
 	}
 }

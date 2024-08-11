@@ -6,14 +6,15 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
+	"os"
 	"testing"
+	"testing/slogtest"
 	"time"
 
 	"github.com/golang/snappy"
 	"github.com/klauspost/compress/zstd"
 	"github.com/picatz/slogproto"
-	"golang.org/x/exp/slog"
-	"golang.org/x/exp/slog/slogtest"
 )
 
 var otherZero = time.Time{}.AddDate(1969, 0, 0)
@@ -34,7 +35,6 @@ func parseLogEntriesForExternal(t *testing.T, data []byte) []map[string]any {
 		}
 
 		r.Attrs(func(a slog.Attr) bool {
-			// Handle groups by converting them to a map
 			if a.Value.Kind() == slog.KindGroup {
 				group := map[string]any{}
 				for _, a := range a.Value.Group() {
@@ -102,7 +102,7 @@ func parseLogEntriesForInteral(t *testing.T, data []byte) []map[string]any {
 func TestHandler(t *testing.T) {
 	var logBuffer bytes.Buffer
 
-	h := slogproto.NewHandler(&logBuffer)
+	h := slogproto.NewHandler(&logBuffer, nil)
 
 	err := slogtest.TestHandler(h, func() []map[string]any {
 		return parseLogEntriesForExternal(t, logBuffer.Bytes())
@@ -135,7 +135,7 @@ func TestHandler_Compression_Comparison(t *testing.T) {
 		{
 			name: "proto",
 			newHandler: func(w io.Writer) slog.Handler {
-				return slogproto.NewHandler(w)
+				return slogproto.NewHandler(w, nil)
 			},
 		},
 	}
@@ -244,7 +244,7 @@ func TestHandler_Compression_Comparison(t *testing.T) {
 func ExampleNewHandler() {
 	var logBuffer bytes.Buffer
 
-	logger := slog.New(slogproto.NewHandler(&logBuffer))
+	logger := slog.New(slogproto.NewHandler(&logBuffer, nil))
 
 	logger.Info("this is a test",
 		slog.Group("test",
@@ -259,12 +259,12 @@ func ExampleNewHandler() {
 	//
 }
 
-func ExampleNewHandler_GZIP() {
+func ExampleNewHandler_gzip() {
 	var logBuffer bytes.Buffer
 
 	w := gzip.NewWriter(&logBuffer)
 
-	logger := slog.New(slogproto.NewHandler(w))
+	logger := slog.New(slogproto.NewHandler(w, nil))
 
 	logger.Info("hello world")
 
@@ -285,7 +285,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 	t.Run("this test expects slog.TimeKey, slog.LevelKey and slog.MessageKey", func(t *testing.T) {
 		var logBuffer bytes.Buffer
 
-		l := slog.New(slogproto.NewHandler(&logBuffer))
+		l := slog.New(slogproto.NewHandler(&logBuffer, nil))
 
 		l.Info("message")
 
@@ -313,7 +313,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 	t.Run("a Handler should output attributes passed to the logging function", func(t *testing.T) {
 		var logBuffer bytes.Buffer
 
-		l := slog.New(slogproto.NewHandler(&logBuffer))
+		l := slog.New(slogproto.NewHandler(&logBuffer, nil))
 
 		l.Info("message", "k", "v")
 
@@ -335,7 +335,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 	t.Run("a Handler should ignore an empty Attr", func(t *testing.T) {
 		var logBuffer bytes.Buffer
 
-		l := slog.New(slogproto.NewHandler(&logBuffer))
+		l := slog.New(slogproto.NewHandler(&logBuffer, nil))
 
 		l.Info("msg", "a", "b", "", nil, "c", "d")
 
@@ -359,7 +359,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 	t.Run("a Handler should ignore a zero Record.Time", func(t *testing.T) {
 		var logBuffer bytes.Buffer
 
-		h := slogproto.NewHandler(&logBuffer)
+		h := slogproto.NewHandler(&logBuffer, nil)
 
 		time := time.Time{}
 
@@ -386,7 +386,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 
 		var logBuffer bytes.Buffer
 
-		l := slog.New(slogproto.NewHandler(&logBuffer))
+		l := slog.New(slogproto.NewHandler(&logBuffer, nil))
 
 		l.Info("msg", "a", "b", slog.Group("", slog.String("c", "d")), "e", "f")
 
@@ -412,7 +412,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 	t.Run("a Handler should include the attributes from the WithAttrs method", func(t *testing.T) {
 		var logBuffer bytes.Buffer
 
-		l := slog.New(slogproto.NewHandler(&logBuffer))
+		l := slog.New(slogproto.NewHandler(&logBuffer, nil))
 
 		l.With("a", "b").Info("msg", "k", "v")
 
@@ -448,7 +448,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 	t.Run("a Handler should handle Group attributes", func(t *testing.T) {
 		var logBuffer bytes.Buffer
 
-		l := slog.New(slogproto.NewHandler(&logBuffer))
+		l := slog.New(slogproto.NewHandler(&logBuffer, nil))
 
 		l.Info("msg", "a", "b", slog.Group("G", slog.String("c", "d")), "e", "f")
 
@@ -488,7 +488,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 	t.Run("a Handler should ignore an empty group", func(t *testing.T) {
 		var logBuffer bytes.Buffer
 
-		l := slog.New(slogproto.NewHandler(&logBuffer))
+		l := slog.New(slogproto.NewHandler(&logBuffer, nil))
 
 		l.Info("msg", "a", "b", slog.Group("G"), "e", "f")
 
@@ -514,7 +514,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 	t.Run("a Handler should handle the WithGroup method", func(t *testing.T) {
 		var logBuffer bytes.Buffer
 
-		l := slog.New(slogproto.NewHandler(&logBuffer))
+		l := slog.New(slogproto.NewHandler(&logBuffer, nil))
 
 		l.WithGroup("G").Info("msg", "a", "b")
 
@@ -553,7 +553,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 	t.Run("a Handler should handle multiple WithGroup and WithAttr calls", func(t *testing.T) {
 		var logBuffer bytes.Buffer
 
-		l := slog.New(slogproto.NewHandler(&logBuffer))
+		l := slog.New(slogproto.NewHandler(&logBuffer, nil))
 
 		l.With("a", "b").WithGroup("G").With("c", "d").WithGroup("H").Info("msg", "e", "f")
 
@@ -617,7 +617,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 	t.Run("a Handler should call Resolve on attribute values", func(t *testing.T) {
 		var logBuffer bytes.Buffer
 
-		l := slog.New(slogproto.NewHandler(&logBuffer))
+		l := slog.New(slogproto.NewHandler(&logBuffer, nil))
 
 		l.Info("msg", "k", &replace{"replaced"})
 
@@ -636,7 +636,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 	t.Run("a Handler should call Resolve on attribute values in groups", func(t *testing.T) {
 		var logBuffer bytes.Buffer
 
-		l := slog.New(slogproto.NewHandler(&logBuffer))
+		l := slog.New(slogproto.NewHandler(&logBuffer, nil))
 
 		l.Info("msg",
 			slog.Group("G",
@@ -679,7 +679,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 	t.Run("a Handler should call Resolve on attribute values from WithAttrs", func(t *testing.T) {
 		var logBuffer bytes.Buffer
 
-		l := slog.New(slogproto.NewHandler(&logBuffer))
+		l := slog.New(slogproto.NewHandler(&logBuffer, nil))
 
 		l = l.With("k", &replace{"replaced"})
 		l.Info("msg")
@@ -699,7 +699,7 @@ func TestHandler_verbose_test_suite(t *testing.T) {
 	t.Run("a Handler should call Resolve on attribute values in groups from WithAttrs", func(t *testing.T) {
 		var logBuffer bytes.Buffer
 
-		l := slog.New(slogproto.NewHandler(&logBuffer))
+		l := slog.New(slogproto.NewHandler(&logBuffer, nil))
 
 		l = l.With(slog.Group("G",
 			slog.String("a", "v1"),
@@ -773,4 +773,26 @@ func humanSize(v int) string {
 	}
 
 	return fmt.Sprintf("%.2f%s", size, unit)
+}
+
+func Example_WriteToFile() {
+	fh, err := os.OpenFile("test.log", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer fh.Close()
+
+	logger := slog.New(slogproto.NewHandler(fh, nil))
+
+	logger.Info("this is a test",
+		slog.Group("test",
+			slog.Int("test1", 1),
+			slog.String("test2", "1"),
+			slog.Float64("test3", 1.0),
+		),
+	)
+
+	logger.Info("example", slog.Int("something", 1))
+	// Output:
+	//
 }

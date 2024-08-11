@@ -1,9 +1,11 @@
 # slogproto
 
-> **Warning**
+> [!WARNING] 
 > This is an experimental module and is subject to change.
 
-Go [`slog.Handler`](https://pkg.go.dev/golang.org/x/exp/slog#Handler) using [Protocol Buffers](https://protobuf.dev/). This can reduce the size of log messages when saving them to disk or sending them over the network, and can reduce the amount of time spent marshaling and unmarshaling log messages at the cost of human readability. To enable interopability with other tools, the `slp` CLI can read protobuf encoded [`slog.Record`](https://pkg.go.dev/golang.org/x/exp/slog#Record)s from STDIN (or a file) and output them as JSON to STDOUT. Logs can be filtered using [CEL](https://github.com/google/cel-spec/blob/master/doc/langdef.md) expressions.
+Go [`log/slog.Handler`](https://pkg.go.dev/log/slog#Handler) using [Protocol Buffers](https://protobuf.dev/). This can reduce the size of log messages when saving them to disk or sending them over the network, and can reduce the amount of time spent marshaling and unmarshaling log messages, at the cost of human readability. 
+
+To enable interopability with other tools, the `slp` CLI can read protobuf encoded [`slog.Record`](https://pkg.go.dev/log/slog#Record)s from STDIN (or a file) and output them as JSON to STDOUT. Logs can be filtered using [CEL](https://github.com/google/cel-spec/blob/master/doc/langdef.md) expressions.
 
 ## Installation
 
@@ -38,10 +40,14 @@ func main() {
 }
 ```
 
+Read from a program that produces slogproto formatted logs to STDOUT (like the example above): 
+
 ```console
 $ go run main.go | slp
 {"time":"2023-08-01T03:12:11.272826Z","level":"INFO","msg":"example","something":1}
 ```
+
+Read from a file in slogproto format:
 
 ```console
 $ slp output.log
@@ -59,10 +65,10 @@ $ slp output.log
 The filter flag can be used to filter logs using a given expression. The expression is evaluated against the [`slog.Record`](https://pkg.go.dev/golang.org/x/exp/slog#Record) and must return a boolean value. For each log record that the expression evaluates as `true` will be output to STDOUT as JSON.
 
 * `attrs` is a map of all the attributes in the log record, not including the message, level, or time.
-	```cel
+	```javascript
 	attrs.something == 1
 	```
-	```cel
+	```javascript
 	has(attrs.something) && attrs.something == 1
 	```
 	> **Important**
@@ -75,7 +81,10 @@ The filter flag can be used to filter logs using a given expression. The express
 ```console
 $ slp --filter='has(attrs.something)' output.log
 {"time":"2023-08-11T00:06:00.474782Z","level":"INFO","msg":"example","something":1}
-$  --filter='msg == "this is a test"' test.log
+```
+
+```console
+$ slp --filter='msg == "this is a test"' test.log
 {"time":"2023-08-11T00:06:00.474033Z","level":"INFO","msg":"this is a test","test":{"test2":"1","test3":1,"test1":1}}
 ```
 

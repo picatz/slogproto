@@ -5,140 +5,121 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
+	"os/signal"
 
 	"github.com/google/cel-go/cel"
-	"github.com/google/cel-go/checker/decls"
 	"github.com/picatz/slogproto"
-	"golang.org/x/exp/slog"
+	"github.com/spf13/cobra"
 )
 
-func filterExprProgram(filterExpr string) (cel.Program, error) {
-	// Create a CEL environment.
-	env, err := cel.NewEnv(
-		// cel.Types(&slogproto.Record{}),
-		cel.Declarations(
-			// Add record variable.
-			decls.NewVar("msg", decls.String),
-			decls.NewVar("level", decls.Int),
-			decls.NewVar("time", decls.Timestamp),
-			decls.NewVar("attrs", decls.NewMapType(decls.String, decls.Any)),
-		),
-	)
+var (
+	filterFlag   string
+	logLevelFlag string
+)
+
+func init() {
+	rootCmd.Flags().StringVarP(&filterFlag, "filter", "f", "", "filter expression")
+	rootCmd.Flags().StringVarP(&logLevelFlag, "log-level", "l", "info", "log level")
+}
+
+var rootCmd = &cobra.Command{
+	Use:   "slp [file]",
+	Short: "Slogproto Log Parser",
+	Long:  `SLP (Slogproto Log Parser) is a simple CLI that reads protobuf messages from STDIN or a file and prints them to STDOUT in JSON format.`,
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		logLevel, err := cmd.Flags().GetString("log-level")
+		if err != nil {
+			return fmt.Errorf("error getting log level flag: %w", err)
+		}
+
+		var level slog.Level
+
+		err = level.UnmarshalText([]byte(logLevel))
+		if err != nil {
+			return fmt.Errorf("error parsing log leve %q: %w", logLevel, err)
+		}
+
+		logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level: level,
+		}))
+
+		expr, err := cmd.Flags().GetString("filter")
+		if err != nil {
+			return fmt.Errorf("error getting filter flag: %w", err)
+		}
+
+		filterProg, err := compileFilter(expr)
+		if err != nil {
+			return fmt.Errorf("error compiling filter expression: %w", err)
+		}
+
+		var input io.Reader = cmd.InOrStdin()
+
+		// Check if STDIN is a pipe or not to determine if we should read from a file
+		// or from STDIN.
+		if len(args) > 0 {
+			file := args[0]
+
+			// Open the file for reading.
+			f, err := os.Open(file)
+			if err != nil {
+				return fmt.Errorf("failed to open file: %w", err)
+			}
+			defer f.Close()
+
+			input = f
+		}
+
+		// Read the protobuf messages from the reader and write them to
+		// STDOUT in JSON format. Only include records that match the filter
+		// expression, if one was provided.
+		err = slogproto.Read(context.Background(), input, func(r *slog.Record) bool {
+			include, err := slogproto.EvalFilter(filterProg, r)
+			if err != nil {
+				logger.Error("error evaluating filter expression", "error", err)
+				return false
+			}
+
+			if include {
+				logger.Handler().Handle(context.Background(), *r)
+			}
+
+			return true
+		})
+
+		return err
+	},
+}
+
+func compileFilter(expr string) (cel.Program, error) {
+	if expr == "" {
+		return nil, nil
+	}
+
+	filterProg, err := slogproto.CompileFilter(expr)
 	if err != nil {
-		return nil, fmt.Errorf("error creating CEL environment: %s", err)
+		return nil, err
 	}
 
-	// Parse the expression.
-	ast, iss := env.Compile(filterExpr)
-	if iss.Err() != nil {
-		return nil, fmt.Errorf("parse error: %s", iss.Err())
-	}
-
-	// Check the type of the expression.
-	checked, issues := env.Check(ast)
-	if issues != nil && issues.Err() != nil {
-		return nil, fmt.Errorf("type-check error: %s", issues.Err())
-	}
-
-	if checked.OutputType().DeclaredTypeName() != "bool" {
-		return nil, fmt.Errorf("invalid filter expression output type: %s", checked.OutputType().DeclaredTypeName())
-	}
-
-	// Return the program.
-	prog, err := env.Program(checked)
-	if err != nil {
-		return nil, fmt.Errorf("program construction error: %s", err)
-	}
-
-	return prog, nil
+	return filterProg, nil
 }
 
 func main() {
-	var filterProg cel.Program
-
-	filterExpr := flag.String("filter", "", "filter expression")
-
-	flag.Parse()
-
-	// If the filter is not empty, then compile it.
-	if filterExpr != nil && *filterExpr != "" {
-		var err error
-		filterProg, err = filterExprProgram(*filterExpr)
-		if err != nil {
-			panic(fmt.Errorf("error compiling filter expression: %s", err))
-		}
-	}
-
-	// Create a new logger that writes to STDOUT in JSON format.
+	// Create a new context that is canceled when the user sends an interrupt signal.
 	//
-	// This is also used to handle errors in this program.
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	// Allows for easy CTRL+C termination of the program.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
 
-	var r io.Reader
-
-	// Check if STDIN is a pipe or not to determine if we should read from a file
-	// or from STDIN.
-	//
-	// If STDIN is a pipe, read from it. Otherwise, read from the file specified
-	// in the first argument.
-	if stat, err := os.Stdin.Stat(); err != nil && (stat.Mode()&os.ModeCharDevice) == 0 {
-		r = os.Stdin
-	} else {
-		if len(flag.Args()) < 1 {
-			fmt.Println("missing file argument")
-			os.Exit(1)
-		}
-
-		f, err := os.Open(flag.Args()[0])
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-		defer f.Close()
-
-		r = f
-	}
-
-	// Read the protobuf messages from the reader and write them to S
-	// TDOUT in JSON format.
-	err := slogproto.Read(context.Background(), r, func(r *slog.Record) bool {
-		if filterProg != nil {
-			attrsMap := map[string]interface{}{}
-			r.Attrs(func(a slog.Attr) bool {
-				attrsMap[a.Key] = a.Value.Any()
-				return true
-			})
-
-			out, _, err := filterProg.Eval(map[string]interface{}{
-				"msg":   r.Message,
-				"level": r.Level,
-				"time":  r.Time,
-				"attrs": attrsMap,
-			})
-			if err != nil {
-				panic(fmt.Errorf("error evaluating filter expression: %s", err))
-			}
-			v, ok := out.Value().(bool)
-			if !ok {
-				panic(fmt.Sprintf("invalid filter expr output value type: %T", out.Value()))
-			}
-			if !v {
-				return true
-			}
-			// Print the record.
-			logger.Handler().Handle(context.Background(), *r)
-		} else {
-			// Print the record.
-			logger.Handler().Handle(context.Background(), *r)
-		}
-		return true
-	})
+	// Execute the root command.
+	err := rootCmd.ExecuteContext(ctx)
 	if err != nil {
-		logger.Error("error reading file", "error", err)
+		fmt.Println(err)
 		os.Exit(1)
 	}
 }
