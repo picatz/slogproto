@@ -87,7 +87,7 @@ func CompileFilter(expr string) (cel.Program, error) {
 //   - attrs: map[string]any
 func EvalFilter(prog cel.Program, r *slog.Record) (bool, error) {
 	if prog == nil {
-		return false, nil
+		return true, nil
 	}
 
 	attrsMap := make(map[string]any, r.NumAttrs())

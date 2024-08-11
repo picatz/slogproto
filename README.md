@@ -40,10 +40,14 @@ func main() {
 }
 ```
 
+Read from a program that produces slogproto formatted logs to STDOUT (like the example above): 
+
 ```console
 $ go run main.go | slp
 {"time":"2023-08-01T03:12:11.272826Z","level":"INFO","msg":"example","something":1}
 ```
+
+Read from a file in slogproto format:
 
 ```console
 $ slp output.log
@@ -77,7 +81,10 @@ The filter flag can be used to filter logs using a given expression. The express
 ```console
 $ slp --filter='has(attrs.something)' output.log
 {"time":"2023-08-11T00:06:00.474782Z","level":"INFO","msg":"example","something":1}
-$  --filter='msg == "this is a test"' test.log
+```
+
+```console
+$ slp --filter='msg == "this is a test"' test.log
 {"time":"2023-08-11T00:06:00.474033Z","level":"INFO","msg":"this is a test","test":{"test2":"1","test3":1,"test1":1}}
 ```
 

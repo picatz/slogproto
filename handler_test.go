@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"testing"
 	"testing/slogtest"
 	"time"
@@ -34,7 +35,6 @@ func parseLogEntriesForExternal(t *testing.T, data []byte) []map[string]any {
 		}
 
 		r.Attrs(func(a slog.Attr) bool {
-			// Handle groups by converting them to a map
 			if a.Value.Kind() == slog.KindGroup {
 				group := map[string]any{}
 				for _, a := range a.Value.Group() {
@@ -773,4 +773,26 @@ func humanSize(v int) string {
 	}
 
 	return fmt.Sprintf("%.2f%s", size, unit)
+}
+
+func Example_WriteToFile() {
+	fh, err := os.OpenFile("test.log", os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer fh.Close()
+
+	logger := slog.New(slogproto.NewHandler(fh, nil))
+
+	logger.Info("this is a test",
+		slog.Group("test",
+			slog.Int("test1", 1),
+			slog.String("test2", "1"),
+			slog.Float64("test3", 1.0),
+		),
+	)
+
+	logger.Info("example", slog.Int("something", 1))
+	// Output:
+	//
 }
