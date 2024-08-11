@@ -5,7 +5,7 @@
 
 Go [`log/slog.Handler`](https://pkg.go.dev/log/slog#Handler) using [Protocol Buffers](https://protobuf.dev/). This can reduce the size of log messages when saving them to disk or sending them over the network, and can reduce the amount of time spent marshaling and unmarshaling log messages, at the cost of human readability. 
 
-To enable interopability with other tools, the `slp` CLI can read protobuf encoded [`slog.Record`](https://pkg.go.dev/log/slog#Record)s from STDIN (or a file) and output them as JSON to STDOUT. Logs can be filtered using [CEL](https://github.com/google/cel-spec/blob/master/doc/langdef.md) expressions.
+To enable interopability with other tools, the `slp` CLI can read protobuf encoded [`slog.Record`](https://pkg.go.dev/log/slog#Record)s from STDIN (or a file) and output them as JSON to STDOUT. Logs can be filtered using [CEL](https://cel.dev/) expressions.
 
 ## Installation
 
@@ -62,7 +62,7 @@ $ slp output.log
 
 #### Filtering
 
-The filter flag can be used to filter logs using a given expression. The expression is evaluated against the [`slog.Record`](https://pkg.go.dev/golang.org/x/exp/slog#Record) and must return a boolean value. For each log record that the expression evaluates as `true` will be output to STDOUT as JSON.
+The filter flag can be used to filter logs using a given [CEL](https://cel.dev/) expression. The expression is evaluated against the [`slog.Record`](https://pkg.go.dev/log/slog#Record) and must return a boolean value. For each log record that the expression evaluates as `true` will be output to STDOUT as JSON.
 
 * `msg` is the message in the log record.
 * `level` is the level in the log record.
@@ -77,6 +77,9 @@ The filter flag can be used to filter logs using a given expression. The express
 	```
 	```javascript
 	attrs.?something.orValue(0) == 1
+	```
+	```javascript
+	cel.bind(value, attrs.?something.else.orValue("default"), value != "example")
 	```
 
 > [!IMPORTANT]
@@ -94,7 +97,7 @@ $ slp --filter='msg == "this is a test"' test.log
 
 ## File Format
 
-The file format is a series of [delimited](https://developers.google.com/protocol-buffers/docs/techniques#streaming) [Protocol Buffer](https://developers.google.com/protocol-buffers) messages. Each message is prefixed with a 32-bit unsigned integer representing the size of the message. The message itself is a protobuf encoded [`slog.Record`](https://pkg.go.dev/golang.org/x/exp/slog#Record).
+The file format is a series of [delimited](https://developers.google.com/protocol-buffers/docs/techniques#streaming) [Protocol Buffer](https://developers.google.com/protocol-buffers) messages. Each message is prefixed with a 32-bit unsigned integer representing the size of the message. The message itself is a protobuf encoded [`slog.Record`](https://pkg.go.dev/log/slog#Record).
 
 ```console
 ╭────────────────────────────────────────────────────────────╮
