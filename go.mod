@@ -1,11 +1,11 @@
 module github.com/picatz/slogproto
 
-go 1.22.6
+go 1.24
 
 require (
 	github.com/golang/snappy v0.0.4
 	github.com/google/cel-go v0.17.1
-	github.com/klauspost/compress v1.16.7
+	github.com/klauspost/compress v1.18.7
 	github.com/spf13/cobra v1.8.1
 	google.golang.org/protobuf v1.33.0
 )
